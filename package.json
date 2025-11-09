@@ -1,0 +1,18 @@
+{
+  "name": "emtest",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "pnpm build:emcc && jasmine",
+    "build:emcc": "emcc @emcc_flags.rsp src.c/tfb.c src.c/tfb_frame.c -otarget/tfb.js"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.12.1",
+  "devDependencies": {
+    "jasmine": "^5.12.0"
+  }
+}
