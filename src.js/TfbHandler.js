@@ -1,18 +1,28 @@
 import TFB from "./tfb.js";
 import {SyncEventTarget} from "./js-util.js";
 
-export default class TinyFieldbus extends SyncEventTarget {
-	constructor({port, id}={}) {
+export default class TfbHandler extends SyncEventTarget {
+	constructor({port, tfb}={}) {
 		super();
 
-		this.id=id;
+		this.tfb=tfb;
 		this.port=port;
-		this.tfb=TFB.tfb_create();
-		TFB.tfb_millis_func(this.tfb,TFB.module.addFunction(()=>{
-			return Date.now();
-		},"i"));
 
-		TFB.tfb_message_func(this.tfb,TFB.module.addFunction((data, size, from)=>{
+		TFB.tfb_message_func(this.tfb,TFB.module.addFunction((data, size)=>{
+			let data_copy=TFB.module.HEAPU8.buffer.slice(data,data+size);
+			let ev=new Event("message");
+			ev.data=data_copy;
+			try {
+				this.dispatchEvent(ev);
+			}
+
+			catch (e) {
+				console.error(e);
+				throw e;
+			}
+		},"vii"));
+
+		TFB.tfb_message_from_func(this.tfb,TFB.module.addFunction((data, size, from)=>{
 			let data_copy=TFB.module.HEAPU8.buffer.slice(data,data+size);
 			let ev=new Event("message");
 			ev.data=data_copy;
@@ -27,9 +37,26 @@ export default class TinyFieldbus extends SyncEventTarget {
 			}
 		},"viii"));
 
+		TFB.tfb_device_func(this.tfb,TFB.module.addFunction((name_ptr)=>{
+			let name=TFB.module.UTF8ToString(name_ptr);
+			let id=TFB.tfb_device_id_by_name(this.tfb,name_ptr);
+			//console.log("device cb: "+name);
+			let ev=new Event("device");
+			ev.name=name;
+			ev.id=id;
+			try {
+				this.dispatchEvent(ev);
+			}
+
+			catch (e) {
+				console.error(e);
+				throw e;
+			}
+		},"vi"));
+
 		this.port.on("data",this.handleData);
 
-		TFB.tfb_set_id(this.tfb,this.id);
+		//TFB.tfb_set_id(this.tfb,this.id);
 		this.updateTimeout();
 	}
 

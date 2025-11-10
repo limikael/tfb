@@ -10,12 +10,15 @@ function def(name, ret, params) {
 	tfb[name]=tfb_module.cwrap(name,ret,params);
 }
 
-def("tfb_create","number",[]);
+def("tfb_create_controller","number",[]);
+def("tfb_create_device","number",["number","number"]);
 def("tfb_dispose","null",["number"]);
 def("tfb_rx_push_byte","null",["number","number"]);
 def("tfb_set_id","null",["number","number"]);
 def("tfb_message_func","null",["number","number"]);
-def("tfb_millis_func","null",["number","number"]);
+def("tfb_message_from_func","null",["number","number"]);
+def("tfb_millis_func","null",["number"]);
+def("tfb_device_func","null",["number"]);
 def("tfb_tx_is_available","boolean",["number"]);
 def("tfb_tx_pop_byte","number",["number"]);
 def("tfb_is_node","boolean",["number"]);
@@ -26,6 +29,7 @@ def("tfb_get_queue_len","number",["number"]);
 def("tfb_is_bus_available","boolean",["number"]);
 def("tfb_srand","null",["number"]);
 def("tfb_get_timeout","number",["number"]);
+def("tfb_device_id_by_name","number",["number"]);
 
 def("tfb_frame_create","number",["number"]);
 def("tfb_frame_dispose","null",["number"]);
@@ -48,6 +52,10 @@ def("tfb_frame_tx_pop_byte","number",["number"]);
 def("tfb_frame_tx_rewind","null",["number"]);
 def("tfb_frame_get_key_at","number",["number","number"]);
 def("tfb_frame_get_num_keys","number",["number"]);
+
+tfb.tfb_millis_func(tfb.module.addFunction(()=>{
+	return Date.now();
+},"i"));
 
 tfb.tfb_frame_get_buffer_array=(tfb_frame)=>{
 	let a=[];

@@ -3,6 +3,7 @@
 #include "tfb_internal.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 void tokenize_frame_buffer(uint8_t **buffer, uint8_t *key, uint8_t **data, size_t *size) {
 	*key=(**buffer)>>3;
@@ -43,28 +44,20 @@ void tokenize_frame_buffer(uint8_t **buffer, uint8_t *key, uint8_t **data, size_
 }
 
 tfb_frame_t *tfb_frame_create(size_t capacity) {
-	tfb_frame_t *frame=malloc(sizeof(tfb_frame_t));
-	frame->buffer=malloc(capacity);
+	tfb_frame_t *frame=tfb_malloc(sizeof(tfb_frame_t));
+	frame->buffer=tfb_malloc(capacity);
 	frame->capacity=capacity;
 	frame->size=0;
 	frame->rx_state=RX_RECEIVE;
 	frame->tx_state=TX_INIT;
 	frame->tx_index=0;
-	frame->send_at=0;
+	frame->send_at=tfb_millis();
 	frame->sent_times=0;
 	frame->tfb=NULL;
 	frame->notification_func=NULL;
 
 	return frame;
 }
-
-/*bool tfb_frame_is_auto_dispose(tfb_frame_t *frame) {
-	return frame->auto_dispose;
-}
-
-void tfb_frame_set_auto_dispose(tfb_frame_t *frame, bool val) {
-	frame->auto_dispose=val;
-}*/
 
 void tfb_frame_set_notification_func(tfb_frame_t *frame, tfb_t *tfb, void (*func)(tfb_t *tfb, tfb_frame_t *tfb_frame)) {
 	frame->tfb=tfb;
@@ -79,8 +72,8 @@ void tfb_frame_notify(tfb_frame_t *frame) {
 }
 
 void tfb_frame_dispose(tfb_frame_t *frame) {
-	free(frame->buffer);
-	free(frame);
+	tfb_free(frame->buffer);
+	tfb_free(frame);
 }
 
 void tfb_frame_rx_push_byte(tfb_frame_t *frame, uint8_t byte) {
@@ -261,6 +254,17 @@ void tfb_frame_write_num(tfb_frame_t *frame, uint8_t key, int num) {
     }
 }
 
+char *tfb_frame_get_strdup(tfb_frame_t *frame, uint8_t key) {
+	size_t size=tfb_frame_get_data_size(frame,key);
+	uint8_t *data=tfb_frame_get_data(frame,key);
+
+	char *s=tfb_malloc(size+1);
+	memcpy(s,data,size);
+	s[size]='\0';
+
+	return s;
+}
+
 int tfb_frame_get_num(tfb_frame_t *frame, uint8_t key) {
 	size_t size=tfb_frame_get_data_size(frame,key);
 	uint8_t *data=tfb_frame_get_data(frame,key);
@@ -325,4 +329,58 @@ int tfb_frame_get_num_keys(tfb_frame_t *frame) {
 	}
 
 	return keyindex;
+}
+
+char *tfb_frame_sprint(tfb_frame_t * frame, char *s) {
+	char *p=s;
+	for (int i=0; i<tfb_frame_get_num_keys(frame); i++) {
+		int key=tfb_frame_get_key_at(frame,i);
+		char *keyname=NULL;
+		int isdata=0;
+
+		switch (key) {
+			case TFB_CHECKSUM: keyname="checksum"; break;
+			case TFB_FROM: keyname="from"; break;
+			case TFB_TO: keyname="to"; break;
+			case TFB_PAYLOAD: keyname="payload"; break;
+			case TFB_SEQ: keyname="seq"; break;
+			case TFB_ACK: keyname="ack"; break;
+			case TFB_ANNOUNCE_NAME: keyname="announce_name"; isdata=1; break;
+			case TFB_ANNOUNCE_TYPE: keyname="announce_type"; isdata=1; break;
+			case TFB_ASSIGN_NAME: keyname="assign_name"; isdata=1; break;
+			case TFB_SESSION_ID: keyname="session_id"; break;
+		}
+
+		if (isdata) {
+			p+=sprintf(p,"%s: (%zu) '",keyname,tfb_frame_get_data_size(frame,key));
+
+			for (int j=0; j<tfb_frame_get_data_size(frame,key); j++) {
+				p+=sprintf(p,"%c",tfb_frame_get_data(frame,key)[j]);
+			}
+
+			p+=sprintf(p,"' ");
+		}
+
+		else {
+			p+=sprintf(p,"%s: %d ",keyname,tfb_frame_get_num(frame,key));
+		}
+	}
+
+	return s;
+}
+
+int tfb_frame_strcmp(tfb_frame_t *frame, uint8_t key, char *s) {
+	if (!tfb_frame_has_data(frame,key))
+		return -1;
+
+	size_t size=tfb_frame_get_data_size(frame,key);
+	if (size!=strlen(s))
+		return -1;
+
+	uint8_t *data=tfb_frame_get_data(frame,key);
+	for (int i=0; i<size; i++)
+		if (s[i]!=data[i])
+			return -1;
+
+	return 0;
 }

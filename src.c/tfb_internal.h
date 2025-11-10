@@ -1,9 +1,17 @@
 #pragma once
 
+#include "tfb.h"
+#include "tfb_frame.h"
+#include "tfb_util.h"
+#include "tfb_device.h"
+
 #define TFB_RX_BUF_SIZE 1024
 #define TFB_TX_QUEUE_LEN 16
 #define TFB_RESEND_BASE 5
 #define TFB_RETRIES 5
+#define TFB_ANNOUNCEMENT_INTERVAL 1000
+
+extern uint32_t (*tfb_millis)();
 
 typedef enum {
 	RX_RECEIVE,
@@ -18,16 +26,25 @@ typedef enum {
 	TX_COMPLETE
 } tfb_frame_tx_state_t;
 
+struct tfb_device {
+	char *name,*type;
+	int id;
+};
+
 struct tfb {
-	tfb_frame_t *rx_frame;
-	tfb_frame_t *tx_frame;
+	tfb_frame_t *rx_frame,*tx_frame;
 	tfb_frame_t *tx_queue[TFB_TX_QUEUE_LEN];
 	size_t tx_queue_len;
-	int id;
-	int seq;
+	int id, seq;
 	uint32_t bus_available_millis;
-	void (*message_func)(uint8_t *data, size_t size, int from);
-	uint32_t (*millis_func)();
+	char *device_name,*device_type;
+	uint32_t announcement_deadline;
+	void (*message_func)(uint8_t *data, size_t size);
+	void (*message_from_func)(uint8_t *data, size_t size, int from);
+	void (*device_func)(char *name);
+	tfb_device_t **devices;
+	size_t num_devices;
+	int session_id;
 };
 
 struct tfb_frame {

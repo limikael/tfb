@@ -7,7 +7,11 @@ let FRAME_KEYS={
 	3: "to",
 	4: "payload",
 	5: "seq",
-	6: "ack"
+	6: "ack",
+	7: "announce_name",
+	8: "announce_type",
+	9: "assign_name",
+	10: "session_id"
 }
 
 export default class Bus extends EventEmitter {
@@ -26,7 +30,7 @@ export default class Bus extends EventEmitter {
 					for (let i=0; i<TFB.tfb_frame_get_num_keys(this.frame); i++) {
 						let key=TFB.tfb_frame_get_key_at(this.frame,i);
 						let key_name=FRAME_KEYS[key];
-						if (["payload"].includes(key_name)) {
+						if (["payload","announce_name","announce_type","assign_name"].includes(key_name)) {
 							let data=TFB.tfb_frame_get_data(this.frame,key);
 							let size=TFB.tfb_frame_get_data_size(this.frame,key);
 							let s=[...TFB.module.HEAPU8.subarray(data,data+size)].map(c=>String.fromCharCode(c)).join("");

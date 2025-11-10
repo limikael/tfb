@@ -9,17 +9,26 @@
 #define TFB_PAYLOAD 4
 #define TFB_SEQ 5
 #define TFB_ACK 6
+#define TFB_ANNOUNCE_NAME 7
+#define TFB_ANNOUNCE_TYPE 8
+#define TFB_ASSIGN_NAME 9
+#define TFB_SESSION_ID 10
 
 typedef struct tfb tfb_t;
 
-tfb_t *tfb_create();
+//tfb_t *tfb_create();
+tfb_t *tfb_create_controller();
+tfb_t *tfb_create_device(char *name, char *type);
 void tfb_dispose(tfb_t *tfb);
 void tfb_set_id(tfb_t *tfb, int id);
-bool tfb_is_node(tfb_t *tfb);
 bool tfb_is_controller(tfb_t *tfb);
+bool tfb_is_device(tfb_t *tfb);
+bool tfb_is_connected(tfb_t *tfb);
 void tfb_rx_push_byte(tfb_t *tfb, uint8_t byte);
-void tfb_message_func(tfb_t *tfb, void (*func)(uint8_t *data, size_t size, int from));
-void tfb_millis_func(tfb_t *tfb, uint32_t (*func)());
+void tfb_message_func(tfb_t *tfb, void (*func)(uint8_t *data, size_t size));
+void tfb_message_from_func(tfb_t *tfb, void (*func)(uint8_t *data, size_t size, int from));
+void tfb_device_func(tfb_t *tfb, void (*func)(char *name));
+void tfb_millis_func(uint32_t (*func)());
 bool tfb_tx_is_available(tfb_t *tfb);
 uint8_t tfb_tx_pop_byte(tfb_t *tfb);
 bool tfb_send(tfb_t *tfb, uint8_t *data, size_t size);
@@ -29,3 +38,4 @@ void tfb_notify_bus_activity(tfb_t *tfb);
 bool tfb_is_bus_available(tfb_t *tfb);
 void tfb_srand(unsigned int seed);
 int tfb_get_timeout(tfb_t *tfb);
+int tfb_device_id_by_name(tfb_t *tfb, char *s);

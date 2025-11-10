@@ -4,52 +4,183 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stddef.h>
+#include <string.h>
 
-void pointer_array_remove(void **array, size_t *size, size_t index) {
-    if (!array || !size) return;          // sanity check
-    if (index >= *size) return;           // out-of-bounds check
+uint32_t (*tfb_millis)()=NULL;
 
-    // shift elements after index left by one
-    for (size_t i = index; i + 1 < *size; ++i) {
-        array[i] = array[i + 1];
-    }
+void tfb_dispose_frame(tfb_t *tfb, tfb_frame_t *frame) {
+	//printf("dispose frame called!!!\n");
 
-    (*size)--; // decrease size
+	for (int i=0; i<tfb->tx_queue_len; i++) {
+		if (tfb->tx_queue[i]==frame) {
+			pointer_array_remove((void**)tfb->tx_queue,&tfb->tx_queue_len,i);
+			i--;
+		}
+	}
+
+	if (tfb->tx_frame==frame)
+		tfb->tx_frame=NULL;
+
+	tfb_frame_dispose(frame);
+}
+
+int tfb_get_device_id_by_name(tfb_t *tfb, char *name) {
+	for (int i=0; i<tfb->num_devices; i++)
+		if (!strcmp(name,tfb->devices[i]->name))
+			return tfb->devices[i]->id;
+
+	return 0;
+}
+
+int tfb_device_id_by_name(tfb_t *tfb, char *s) {
+	if (!tfb_is_controller(tfb))
+		return 0;
+
+	for (int i=0; i<tfb->num_devices; i++)
+		if (!strcmp(tfb->devices[i]->name,s))
+			return tfb->devices[i]->id;
+
+	return 0;
+}
+
+void tfb_schedule_resend(tfb_t *tfb, tfb_frame_t *frame) {
+	frame->sent_times++;
+	frame->send_at=tfb_millis()+(TFB_RESEND_BASE<<frame->sent_times);
+}
+
+void tfb_schedule_announcement(tfb_t *tfb, tfb_frame_t *frame) {
+	tfb_dispose_frame(tfb,frame);
+	tfb->announcement_deadline=tfb_millis()+TFB_ANNOUNCEMENT_INTERVAL;
 }
 
 tfb_t *tfb_create() {
-	tfb_t *tfb=malloc(sizeof(tfb_t));
+	if (!tfb_millis) {
+		printf("**** millis function not set! ****\n");
+		return NULL;
+	}
+
+	//printf("millis=%p\n",tfb_millis);
+
+	tfb_t *tfb=tfb_malloc(sizeof(tfb_t));
 	tfb->rx_frame=tfb_frame_create(TFB_RX_BUF_SIZE);
 	tfb->tx_frame=NULL;
 	tfb->id=-1;
 	tfb->message_func=NULL;
-	tfb->millis_func=NULL;
+	tfb->message_from_func=NULL;
 	tfb->tx_queue_len=0;
 	tfb->bus_available_millis=0;
 	tfb->seq=1;
+	tfb->device_name=NULL;
+	tfb->device_type=NULL;
+	tfb->announcement_deadline=0;
+	tfb->num_devices=0;
+	tfb->devices=NULL;
+	tfb->session_id=0;
+	tfb->device_func=NULL;
+
+	tfb_notify_bus_activity(tfb);
 
 	return tfb;
 }
 
-bool tfb_is_node(tfb_t *tfb) {
-	return tfb->id>0;
+tfb_frame_t *tfb_create_announce_session_frame(tfb_t *tfb) {
+	tfb_frame_t *sessionframe=tfb_frame_create(1024);
+	tfb_frame_set_notification_func(sessionframe,tfb,tfb_schedule_announcement);
+	tfb_frame_write_num(sessionframe,TFB_SESSION_ID,tfb->session_id);
+	tfb_frame_write_checksum(sessionframe);
+
+	return sessionframe;
+}
+
+tfb_frame_t *tfb_create_announce_device_frame(tfb_t *tfb) {
+	tfb_frame_t *announceframe=tfb_frame_create(1024);
+	tfb_frame_set_notification_func(announceframe,tfb,tfb_dispose_frame);
+	tfb_frame_write_data(announceframe,TFB_ANNOUNCE_NAME,(uint8_t *)tfb->device_name,strlen(tfb->device_name));
+	tfb_frame_write_data(announceframe,TFB_ANNOUNCE_TYPE,(uint8_t *)tfb->device_type,strlen(tfb->device_type));
+	tfb_frame_write_checksum(announceframe);
+
+	return announceframe;
+}
+
+tfb_t *tfb_create_controller() {
+	tfb_t *tfb=tfb_create();
+	tfb->id=0;
+	tfb->devices=tfb_malloc(sizeof(tfb_device_t *)*16); // TODO: make dynamic
+	tfb->session_id=(rand()%32000)+1;
+	tfb->tx_queue[tfb->tx_queue_len++]=tfb_create_announce_session_frame(tfb);
+
+	return tfb;
+}
+
+tfb_t *tfb_create_device(char *name, char *type) {
+	tfb_t *tfb=tfb_create();
+	tfb->device_name=tfb_strdup(name);
+	tfb->device_type=tfb_strdup(type);
+	tfb->id=-1;
+
+	//printf("will send device announcement, name=%s, type=%s\n",tfb->device_name,tfb->device_type);
+	tfb->tx_queue[tfb->tx_queue_len++]=tfb_create_announce_device_frame(tfb);
+
+	return tfb;
+}
+
+bool tfb_is_device(tfb_t *tfb) {
+	return (tfb->id!=0);
 }
 
 bool tfb_is_controller(tfb_t *tfb) {
 	return (tfb->id==0);
 }
 
-void tfb_message_func(tfb_t *tfb, void (*func)(uint8_t *data, size_t size, int from)) {
+bool tfb_is_connected(tfb_t *tfb) {
+	if (tfb_is_controller(tfb))
+		return true;
+
+	return (tfb->id>0);
+}
+
+void tfb_message_func(tfb_t *tfb, void (*func)(uint8_t *data, size_t size)) {
 	tfb->message_func=func;
+}
+
+void tfb_message_from_func(tfb_t *tfb, void (*func)(uint8_t *data, size_t size, int from)) {
+	tfb->message_from_func=func;
+}
+
+void tfb_device_func(tfb_t *tfb, void (*func)(char *name)) {
+	tfb->device_func=func;
 }
 
 void tfb_dispose(tfb_t *tfb) {
 	tfb_frame_dispose(tfb->rx_frame);
-	free(tfb);
+	if (tfb->tx_frame)
+		tfb_dispose_frame(tfb,tfb->tx_frame);
+
+	while (tfb->tx_queue_len)
+		tfb_dispose_frame(tfb,tfb->tx_queue[0]);
+
+	if (tfb->device_name)
+		tfb_free(tfb->device_name);
+
+	if (tfb->device_type)
+		tfb_free(tfb->device_type);
+
+	for (int i=0; i<tfb->num_devices; i++)
+		tfb_device_dispose(tfb->devices[i]);
+
+	if (tfb->devices)
+		tfb_free(tfb->devices);
+
+	tfb_free(tfb);
 }
 
 void tfb_set_id(tfb_t *tfb, int id) {
-	//printf("set id: %d\n",id);
+	if (tfb->tx_frame)
+		tfb_dispose_frame(tfb,tfb->tx_frame);
+
+	while (tfb->tx_queue_len)
+		tfb_dispose_frame(tfb,tfb->tx_queue[0]);
+
 	tfb->id=id;
 }
 
@@ -58,11 +189,8 @@ void tfb_tx_make_current(tfb_t *tfb, tfb_frame_t *frame) {
 	tfb->tx_frame=frame;
 }
 
-bool tfb_is_frame_processable_by_us(tfb_t *tfb, tfb_frame_t *frame) {
-	if (tfb_frame_get_checksum(tfb->rx_frame))
-		return false;
-
-	if (tfb_is_node(tfb)) {
+bool tfb_is_frame_message_for_us(tfb_t *tfb, tfb_frame_t *frame) {
+	if (tfb_is_device(tfb) && tfb_is_connected(tfb)) {
 		if (!tfb_frame_has_data(frame,TFB_TO))
 			return false;
 
@@ -79,71 +207,119 @@ bool tfb_is_frame_processable_by_us(tfb_t *tfb, tfb_frame_t *frame) {
 	return false;
 }
 
-void tfb_dispose_frame(tfb_t *tfb, tfb_frame_t *frame) {
-	//printf("dispose frame called!!!\n");
+int tfb_get_available_device_id(tfb_t *tfb) {
+	int max_id=0;
 
-	for (int i=0; i<tfb->tx_queue_len; i++) {
-		if (tfb->tx_queue[i]==frame) {
-			pointer_array_remove((void**)tfb->tx_queue,&tfb->tx_queue_len,i);
-			i--;
-		}
-	}
+	for (int i=0; i<tfb->num_devices; i++)
+		if (tfb->devices[i]->id>max_id)
+			max_id=tfb->devices[i]->id;
 
-	tfb_frame_dispose(frame);
-}
-
-void tfb_schedule_resend(tfb_t *tfb, tfb_frame_t *frame) {
-	frame->sent_times++;
-	frame->send_at=tfb->millis_func()+(TFB_RESEND_BASE<<frame->sent_times);
+	return max_id+1;
 }
 
 void tfb_rx_push_byte(tfb_t *tfb, uint8_t byte) {
+	if (tfb->tx_frame)
+		return;
+
 	tfb_notify_bus_activity(tfb);
 	tfb_frame_rx_push_byte(tfb->rx_frame,byte);
 
-	if (tfb_frame_rx_is_complete(tfb->rx_frame)) {
-		if (tfb_is_frame_processable_by_us(tfb,tfb->rx_frame)) {
-			//printf("proc frame\n");
+	if (!tfb_frame_rx_is_complete(tfb->rx_frame))
+		return;
 
-			if (tfb_frame_has_data(tfb->rx_frame,TFB_PAYLOAD)) {
-				uint8_t *payload=tfb_frame_get_data(tfb->rx_frame,TFB_PAYLOAD);
-				size_t payload_size=tfb_frame_get_data_size(tfb->rx_frame,TFB_PAYLOAD);
+	if (tfb_frame_get_checksum(tfb->rx_frame)) {
+		tfb_frame_reset(tfb->rx_frame);
+		return;
+	}
 
-				tfb_frame_t *ackframe=tfb_frame_create(128);
-				tfb_frame_set_notification_func(ackframe,tfb,tfb_dispose_frame);
-				//tfb_frame_set_auto_dispose(ackframe,true);
+	if (tfb_is_frame_message_for_us(tfb,tfb->rx_frame)) {
+		//printf("proc frame\n");
 
-				if (tfb_is_controller(tfb)) {
-					//printf("acking in controller to: %d\n",tfb_frame_get_num(tfb->rx_frame,TFB_FROM));
-					tfb_frame_write_num(ackframe,TFB_TO,tfb_frame_get_num(tfb->rx_frame,TFB_FROM));
-				}
+		if (tfb_frame_has_data(tfb->rx_frame,TFB_PAYLOAD)) {
+			uint8_t *payload=tfb_frame_get_data(tfb->rx_frame,TFB_PAYLOAD);
+			size_t payload_size=tfb_frame_get_data_size(tfb->rx_frame,TFB_PAYLOAD);
 
-				if (tfb_is_node(tfb))
-					tfb_frame_write_num(ackframe,TFB_FROM,tfb->id);
+			tfb_frame_t *ackframe=tfb_frame_create(128);
+			tfb_frame_set_notification_func(ackframe,tfb,tfb_dispose_frame);
+			//tfb_frame_set_auto_dispose(ackframe,true);
 
-				tfb_frame_write_num(ackframe,TFB_ACK,tfb_frame_get_num(tfb->rx_frame,TFB_SEQ));
-				tfb_frame_write_checksum(ackframe);
-				tfb_tx_make_current(tfb,ackframe);
-
-				if (tfb->message_func)
-					tfb->message_func(payload,payload_size,tfb_frame_get_num(tfb->rx_frame,TFB_FROM));
+			if (tfb_is_controller(tfb)) {
+				//printf("acking in controller to: %d\n",tfb_frame_get_num(tfb->rx_frame,TFB_FROM));
+				tfb_frame_write_num(ackframe,TFB_TO,tfb_frame_get_num(tfb->rx_frame,TFB_FROM));
 			}
 
-			if (tfb_frame_has_data(tfb->rx_frame,TFB_ACK)) {
-				int ackseq=tfb_frame_get_num(tfb->rx_frame,TFB_ACK);
-				//printf("got ack: %d we are: %d\n",ackseq,tfb->id);
-				for (int i=0; i<tfb->tx_queue_len; i++) {
-					if (tfb_frame_has_data(tfb->tx_queue[i],TFB_SEQ) &&
-							tfb_frame_get_num(tfb->tx_queue[i],TFB_SEQ)==ackseq) {
-						tfb_dispose_frame(tfb,tfb->tx_queue[i]);
-						i--;
-					}
+			if (tfb_is_device(tfb))
+				tfb_frame_write_num(ackframe,TFB_FROM,tfb->id);
+
+			tfb_frame_write_num(ackframe,TFB_ACK,tfb_frame_get_num(tfb->rx_frame,TFB_SEQ));
+			tfb_frame_write_checksum(ackframe);
+			tfb_tx_make_current(tfb,ackframe);
+
+			if (tfb_is_controller(tfb) && tfb->message_from_func)
+				tfb->message_from_func(payload,payload_size,tfb_frame_get_num(tfb->rx_frame,TFB_FROM));
+
+			if (tfb_is_device(tfb) && tfb->message_func)
+				tfb->message_func(payload,payload_size);
+		}
+
+		if (tfb_frame_has_data(tfb->rx_frame,TFB_ACK)) {
+			int ackseq=tfb_frame_get_num(tfb->rx_frame,TFB_ACK);
+			//printf("got ack: %d we are: %d\n",ackseq,tfb->id);
+			for (int i=0; i<tfb->tx_queue_len; i++) {
+				if (tfb_frame_has_data(tfb->tx_queue[i],TFB_SEQ) &&
+						tfb_frame_get_num(tfb->tx_queue[i],TFB_SEQ)==ackseq) {
+					tfb_dispose_frame(tfb,tfb->tx_queue[i]);
+					i--;
 				}
 			}
 		}
-
-		tfb_frame_reset(tfb->rx_frame);
 	}
+
+	if (tfb_is_controller(tfb) &&
+			tfb_frame_has_data(tfb->rx_frame,TFB_ANNOUNCE_NAME)) {
+		char *name=tfb_frame_get_strdup(tfb->rx_frame,TFB_ANNOUNCE_NAME);
+		//printf("got announce name: %s\n",name);
+		int id=tfb_get_device_id_by_name(tfb,name);
+		if (!id) {
+			char *type=tfb_frame_get_strdup(tfb->rx_frame,TFB_ANNOUNCE_TYPE);
+			id=tfb_get_available_device_id(tfb);
+			//printf("creating device id: %d\n",id);
+			tfb_device_t *device=tfb_device_create(id,name,type);
+			tfb_free(type);
+
+			tfb->devices[tfb->num_devices++]=device;
+
+			if (tfb->device_func)
+				tfb->device_func(device->name);
+		}
+
+		tfb_frame_t *assignframe=tfb_frame_create(1024);
+		tfb_frame_set_notification_func(assignframe,tfb,tfb_dispose_frame);
+		tfb_frame_write_data(assignframe,TFB_ASSIGN_NAME,(uint8_t*)name,strlen(name));
+		tfb_frame_write_num(assignframe,TFB_TO,id);
+		tfb_frame_write_num(assignframe,TFB_SESSION_ID,tfb->session_id);
+		tfb_frame_write_checksum(assignframe);
+		tfb_tx_make_current(tfb,assignframe);
+
+		tfb_free(name);
+	}
+
+	if (tfb_is_device(tfb) &&
+			tfb_frame_has_data(tfb->rx_frame,TFB_SESSION_ID)) {
+		int session_id=tfb_frame_get_num(tfb->rx_frame,TFB_SESSION_ID);
+		// TODO! reset if session id changed...
+		tfb->session_id=session_id;
+
+		if (!tfb_frame_strcmp(tfb->rx_frame,TFB_ASSIGN_NAME,tfb->device_name)) {
+			int id=tfb_frame_get_num(tfb->rx_frame,TFB_TO);
+			//printf("got assignment: %d\n",id);
+			if (id!=tfb->id) {
+				tfb_set_id(tfb,id);
+			}
+		}
+	}
+
+	tfb_frame_reset(tfb->rx_frame);
 }
 
 bool tfb_tx_is_available(tfb_t *tfb) {
@@ -165,24 +341,11 @@ uint8_t tfb_tx_pop_byte(tfb_t *tfb) {
 		tfb->tx_frame=NULL;
 	}
 
-		/*if (tfb_frame_is_auto_dispose(tfb->tx_frame)) {
-			tfb_frame_dispose(tfb->tx_frame);
-		}
-
-		else {
-			tfb->tx_frame->sent_times++;
-			tfb->tx_frame->send_at=tfb->millis_func()+(TFB_RESEND_BASE<<tfb->tx_frame->sent_times);
-		}*/
-
-
 	return byte;
 }
 
 bool tfb_send(tfb_t *tfb, uint8_t *data, size_t size) {
-	if (!tfb->millis_func)
-		return false;
-
-	if (!tfb_is_node(tfb))
+	if (!tfb_is_device(tfb))
 		return false;
 
 	if (tfb->tx_queue_len>=TFB_TX_QUEUE_LEN)
@@ -194,7 +357,6 @@ bool tfb_send(tfb_t *tfb, uint8_t *data, size_t size) {
 	tfb_frame_write_data(frame,TFB_PAYLOAD,data,size);
 	tfb_frame_write_checksum(frame);
 	tfb_frame_set_notification_func(frame,tfb,tfb_schedule_resend);
-	frame->send_at=tfb->millis_func();
 	tfb->seq++;
 
 	tfb->tx_queue[tfb->tx_queue_len++]=frame;
@@ -205,10 +367,7 @@ bool tfb_send(tfb_t *tfb, uint8_t *data, size_t size) {
 }
 
 tfb_frame_t *tfb_get_send_frame(tfb_t *tfb) {
-	if (!tfb->millis_func)
-		return NULL;
-
-	int millis=tfb->millis_func();
+	int millis=tfb_millis();
 	for (int i=0; i<tfb->tx_queue_len; i++)
 		if (millis>=tfb->tx_queue[i]->send_at)
 			return tfb->tx_queue[i];
@@ -217,10 +376,21 @@ tfb_frame_t *tfb_get_send_frame(tfb_t *tfb) {
 }
 
 void tfb_tick(tfb_t *tfb) {
-	if (tfb->tx_frame || !tfb->millis_func)
+	if (tfb->tx_frame)
 		return;
 
-	int millis=tfb->millis_func();
+	int millis=tfb_millis();
+	if (tfb->announcement_deadline &&
+			millis>=tfb->announcement_deadline) {
+		tfb->announcement_deadline=0;
+		if (tfb_is_controller(tfb)) {
+			tfb->tx_queue[tfb->tx_queue_len++]=tfb_create_announce_session_frame(tfb);
+		}
+
+		/*if (tfb_is_device(tfb)) {
+		}*/
+	}
+
 	for (int i=0; i<tfb->tx_queue_len; i++) {
 		if (tfb->tx_queue[i]->sent_times>=TFB_RETRIES &&
 				tfb->tx_queue[i]->send_at>=millis) {
@@ -241,15 +411,11 @@ int tfb_get_queue_len(tfb_t *tfb) {
 	return tfb->tx_queue_len;
 }
 
-void tfb_millis_func(tfb_t *tfb, uint32_t (*func)()) {
-	tfb->millis_func=func;
-	tfb_notify_bus_activity(tfb);
+void tfb_millis_func(uint32_t (*func)()) {
+	tfb_millis=func;
 }
 
 void tfb_notify_bus_activity(tfb_t *tfb) {
-	if (!tfb->millis_func)
-		return;
-
 	uint32_t baud=9600;
 	uint32_t byte_time = 1000 * 10 / baud; // 10 bits per byte in ms
 	if (!byte_time)
@@ -258,15 +424,12 @@ void tfb_notify_bus_activity(tfb_t *tfb) {
 	uint32_t base = 2 * byte_time;         // wait at least 2 bytes
 	uint32_t random_backoff = (rand() % 10);// * byte_time;
 
-	tfb->bus_available_millis=tfb->millis_func()+base+random_backoff;
+	tfb->bus_available_millis=tfb_millis()+base+random_backoff;
 	//printf("update bus available: %u\n",tfb->bus_available_millis);
 }
 
 bool tfb_is_bus_available(tfb_t *tfb) {
-	if (!tfb->millis_func)
-		return false;
-
-	if ((int32_t)(tfb->millis_func() - tfb->bus_available_millis) >= 0)
+	if ((int32_t)(tfb_millis() - tfb->bus_available_millis) >= 0)
 		return true;
 
 	return false;
@@ -277,19 +440,23 @@ void tfb_srand(unsigned int seed) {
 }
 
 int tfb_get_timeout(tfb_t *tfb) {
-	if (!tfb->tx_queue_len)
-		return -1;
+	int deadline=0;
 
-	int send_at=tfb->tx_queue[0]->send_at;
+	if (tfb->announcement_deadline)
+		deadline=tfb->announcement_deadline;
+
 	for (int i=0; i<tfb->tx_queue_len; i++) {
-		if (tfb->tx_queue[i]->send_at<send_at)
-			send_at=tfb->tx_queue[i]->send_at;
+		if (!deadline || tfb->tx_queue[i]->send_at<deadline)
+			deadline=tfb->tx_queue[i]->send_at;
 	}
 
-	if (send_at<tfb->bus_available_millis)
-		send_at=tfb->bus_available_millis;
+	if (!deadline)
+		return -1;
 
-	int delay=send_at-tfb->millis_func();
+	if (deadline<tfb->bus_available_millis)
+		deadline=tfb->bus_available_millis;
+
+	int delay=deadline-tfb_millis();
 	if (delay<0)
 		delay=0;
 

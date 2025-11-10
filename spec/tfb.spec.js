@@ -21,9 +21,20 @@ function drain_tx_to_frame(tfb) {
 }
 
 describe("tfb",()=>{
+    beforeEach(function() {
+		jasmine.clock().install();
+    });
+
+    afterEach(function() {
+		jasmine.clock().uninstall();
+    });
+
 	it("can be created",async ()=>{
-		let tfb=TFB.tfb_create();
+		let tfb=TFB.tfb_create_controller();
 		TFB.tfb_dispose(tfb);
+
+		let tfb2=TFB.tfb_create_device("hello","this is the hello device");
+		TFB.tfb_dispose(tfb2);
 	});
 
 	it("can call the message callback, and sends acks",()=>{
@@ -36,12 +47,12 @@ describe("tfb",()=>{
 
 		let callbackParams=[];
 
-		let tfb=TFB.tfb_create();
+		let tfb=TFB.tfb_create_device("a","b");
 		TFB.tfb_set_id(tfb,34);
 		TFB.tfb_message_func(tfb,TFB.module.addFunction((data,size)=>{
 			let a=[...TFB.module.HEAPU8.subarray(data,data+size)].map(c=>String.fromCharCode(c)).join("");
 			callbackParams.push(a);
-		},"viii"));
+		},"vii"));
 
 		while (TFB.tfb_frame_tx_is_available(frame)) {
 			let byte=TFB.tfb_frame_tx_pop_byte(frame);
@@ -58,18 +69,14 @@ describe("tfb",()=>{
 	});
 
 	it("can send and ack",()=>{
+		jasmine.clock().mockDate(new Date(1000));
 		TFB.tfb_srand(Date.now());
 
-		let millis=1000;
-
-		let tfb=TFB.tfb_create();
+		let tfb=TFB.tfb_create_device("a","b");
 		TFB.tfb_set_id(tfb,34);
-		TFB.tfb_millis_func(tfb,TFB.module.addFunction(()=>{
-			return millis;
-		},"i"));
 
 		expect(TFB.tfb_is_bus_available(tfb)).toEqual(false);
-		millis=2000;
+		jasmine.clock().mockDate(new Date(2000));
 		expect(TFB.tfb_is_bus_available(tfb)).toEqual(true);
 
 		let res=TFB.tfb_send(tfb,TFB.tfb_module.allocateUTF8("hello"),5);
@@ -96,13 +103,10 @@ describe("tfb",()=>{
 	});
 
 	it("does resend",()=>{
+		jasmine.clock().mockDate(new Date(1000));
 		TFB.tfb_srand(Date.now());
-		let millis=1000;
-		let tfb=TFB.tfb_create();
+		let tfb=TFB.tfb_create_device("a","b");
 		TFB.tfb_set_id(tfb,34);
-		TFB.tfb_millis_func(tfb,TFB.module.addFunction(()=>{
-			return millis;
-		},"i"));
 
 		expect(TFB.tfb_get_timeout(tfb)).toEqual(-1);
 
@@ -116,7 +120,7 @@ describe("tfb",()=>{
 			//console.log("timeout: "+TFB.tfb_get_timeout(tfb));
 
 			if (TFB.tfb_get_timeout(tfb)>=0)
-				millis+=TFB.tfb_get_timeout(tfb);
+				jasmine.clock().mockDate(new Date(Date.now()+TFB.tfb_get_timeout(tfb)));
 
 			TFB.tfb_tick(tfb);
 
