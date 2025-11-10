@@ -67,12 +67,14 @@ tfb_t *tfb_create() {
 	tfb->id=-1;
 	tfb->message_func=NULL;
 	tfb->message_from_func=NULL;
+	tfb->status_func=NULL;
 	tfb->tx_queue_len=0;
 	tfb->bus_available_millis=0;
 	tfb->seq=1;
 	tfb->device_name=NULL;
 	tfb->device_type=NULL;
 	tfb->announcement_deadline=0;
+	tfb->activity_deadline=0;
 	tfb->num_devices=0;
 	tfb->devices=NULL;
 	tfb->session_id=0;
@@ -139,6 +141,10 @@ bool tfb_is_connected(tfb_t *tfb) {
 	return (tfb->id>0);
 }
 
+void tfb_status_func(tfb_t *tfb, void (*func)()) {
+	tfb->status_func=func;
+}
+
 void tfb_message_func(tfb_t *tfb, void (*func)(uint8_t *data, size_t size)) {
 	tfb->message_func=func;
 }
@@ -175,6 +181,10 @@ void tfb_dispose(tfb_t *tfb) {
 }
 
 void tfb_set_id(tfb_t *tfb, int id) {
+	if (!tfb_is_device(tfb))
+		return;
+
+	bool prev_connected=tfb_is_connected(tfb);
 	if (tfb->tx_frame)
 		tfb_dispose_frame(tfb,tfb->tx_frame);
 
@@ -182,6 +192,14 @@ void tfb_set_id(tfb_t *tfb, int id) {
 		tfb_dispose_frame(tfb,tfb->tx_queue[0]);
 
 	tfb->id=id;
+	if (!tfb_is_connected(tfb))
+		tfb->activity_deadline=0;
+
+	bool current_connected=tfb_is_connected(tfb);
+
+	if (prev_connected!=current_connected &&
+			tfb->status_func)
+		tfb->status_func();
 }
 
 void tfb_tx_make_current(tfb_t *tfb, tfb_frame_t *frame) {
@@ -317,6 +335,9 @@ void tfb_rx_push_byte(tfb_t *tfb, uint8_t byte) {
 				tfb_set_id(tfb,id);
 			}
 		}
+
+		if (tfb_is_connected(tfb))
+			tfb->activity_deadline=tfb_millis()+TFB_CONNECTION_TIMEOUT;
 	}
 
 	tfb_frame_reset(tfb->rx_frame);
@@ -404,16 +425,20 @@ void tfb_tick(tfb_t *tfb) {
 		if (tfb_is_controller(tfb)) {
 			tfb->tx_queue[tfb->tx_queue_len++]=tfb_create_announce_session_frame(tfb);
 		}
-
-		/*if (tfb_is_device(tfb)) {
-		}*/
 	}
 
 	for (int i=0; i<tfb->tx_queue_len; i++) {
 		if (tfb->tx_queue[i]->sent_times>=TFB_RETRIES &&
 				tfb->tx_queue[i]->send_at>=millis) {
-			tfb_dispose_frame(tfb,tfb->tx_queue[i]);
-			i--;
+			if (tfb_is_device(tfb)) {
+				tfb_set_id(tfb,-1);
+				return;
+			}
+
+			if (tfb_is_controller(tfb)) {
+				tfb_dispose_frame(tfb,tfb->tx_queue[i]);
+				i--;
+			}
 		}
 	}
 
@@ -422,6 +447,11 @@ void tfb_tick(tfb_t *tfb) {
 			!tfb->tx_frame &&
 			send_cand) {
 		tfb_tx_make_current(tfb,send_cand);
+	}
+
+	if (tfb->activity_deadline && millis>=tfb->activity_deadline) {
+		tfb_set_id(tfb,-1);
+		return;
 	}
 }
 
@@ -462,6 +492,11 @@ int tfb_get_timeout(tfb_t *tfb) {
 
 	if (tfb->announcement_deadline)
 		deadline=tfb->announcement_deadline;
+
+	if (tfb->activity_deadline) {
+		if (!deadline || tfb->activity_deadline<deadline)
+			deadline=tfb->activity_deadline;
+	}
 
 	for (int i=0; i<tfb->tx_queue_len; i++) {
 		if (!deadline || tfb->tx_queue[i]->send_at<deadline)

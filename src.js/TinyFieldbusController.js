@@ -5,6 +5,7 @@ import {arrayBufferToString, SyncEventTarget} from "./js-util.js";
 export default class TinyFieldbusController extends SyncEventTarget {
 	constructor({port}={}) {
 		super();
+		this.port=port;
 		this.tfb=TFB.tfb_create_controller();
 		this.tfbHandler=new TfbHandler({tfb: this.tfb, port});
 		this.tfbHandler.addEventListener("device",this.handleDevice);

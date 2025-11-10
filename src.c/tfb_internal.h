@@ -10,6 +10,7 @@
 #define TFB_RESEND_BASE 5
 #define TFB_RETRIES 5
 #define TFB_ANNOUNCEMENT_INTERVAL 1000
+#define TFB_CONNECTION_TIMEOUT 5000
 
 extern uint32_t (*tfb_millis)();
 
@@ -38,10 +39,11 @@ struct tfb {
 	int id, seq;
 	uint32_t bus_available_millis;
 	char *device_name,*device_type;
-	uint32_t announcement_deadline;
+	uint32_t announcement_deadline,activity_deadline;
 	void (*message_func)(uint8_t *data, size_t size);
 	void (*message_from_func)(uint8_t *data, size_t size, int from);
 	void (*device_func)(char *name);
+	void (*status_func)();
 	tfb_device_t **devices;
 	size_t num_devices;
 	int session_id;

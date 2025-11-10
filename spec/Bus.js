@@ -57,6 +57,9 @@ export default class Bus extends EventEmitter {
 	createPort() {
 		let port=new EventEmitter();
 		port.write=data=>{
+			if (!this.ports.includes(port))
+				return;
+
 			for (let p of this.ports)
 				if (p!=port)
 					p.emit("data",data);
@@ -65,5 +68,11 @@ export default class Bus extends EventEmitter {
 		this.ports.push(port);
 
 		return port;
+	}
+
+	removePort(port) {
+		let index=this.ports.indexOf(port);
+		if (index>=0)
+			this.ports.splice(index,1);
 	}
 }

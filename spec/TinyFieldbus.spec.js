@@ -33,6 +33,61 @@ describe("tiny fieldbus",()=>{
 
 			expect(frame_log[0].hasOwnProperty("session_id")).toBeTrue();
 		});
+
+		it("can check connection and closes itself on missed ack",async ()=>{
+			jasmine.clock().mockDate(new Date(1000));
+			let frame_log=[];
+			let event_log=[];
+
+			let bus=new Bus();
+			bus.on("frame",o=>{
+				//console.log(o);
+				frame_log.push(o);
+			});
+
+			let c=new TinyFieldbusController({port: bus.createPort()});
+			let d=new TinyFieldbusDevice({port: bus.createPort(), name: "hello", type: "world"});
+			d.addEventListener("connect",()=>event_log.push("connect"));
+			d.addEventListener("close",()=>event_log.push("close"));
+			expect(d.isConnected()).toEqual(false);
+
+			jasmine.clock().tick(1000);
+			expect(event_log).toEqual(["connect"]);
+			expect(d.isConnected()).toEqual(true);
+			expect(frame_log.length).toEqual(3);
+
+			bus.removePort(c.port);
+
+			d.send("hello");
+			jasmine.clock().tick(10000);
+			expect(event_log).toEqual(["connect","close"]);
+
+			expect(d.isConnected()).toEqual(false);
+		});
+
+		it("closes itself if controller not seen",async ()=>{
+			jasmine.clock().mockDate(new Date(1000));
+			let frame_log=[];
+			let event_log=[];
+
+			let bus=new Bus();
+			bus.on("frame",o=>{
+				//console.log(o);
+				frame_log.push(o);
+			});
+
+			let c=new TinyFieldbusController({port: bus.createPort()});
+			let d=new TinyFieldbusDevice({port: bus.createPort(), name: "hello", type: "world"});
+			expect(d.isConnected()).toEqual(false);
+
+			jasmine.clock().tick(10000);
+			expect(d.isConnected()).toEqual(true);
+
+			bus.removePort(c.port);
+			jasmine.clock().tick(10000);
+
+			expect(d.isConnected()).toEqual(false);
+		});
 	});
 
 	it("assigns",async ()=>{

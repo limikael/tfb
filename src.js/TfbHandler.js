@@ -28,6 +28,10 @@ export default class TfbHandler extends SyncEventTarget {
 			})));
 		},"vi"));
 
+		TFB.tfb_status_func(this.tfb,TFB.module.addFunction(()=>{
+			logAndThrow(()=>this.dispatchEvent(new CustomEvent("status")));
+		},"v"));
+
 		//TFB.tfb_set_id(this.tfb,this.id);
 		this.port.on("data",this.handleData);
 		this.updateTimeout();
