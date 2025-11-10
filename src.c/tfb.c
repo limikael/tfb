@@ -184,6 +184,9 @@ void tfb_set_id(tfb_t *tfb, int id) {
 	if (!tfb_is_device(tfb))
 		return;
 
+	if (id==tfb->id)
+		return;
+
 	bool prev_connected=tfb_is_connected(tfb);
 	if (tfb->tx_frame)
 		tfb_dispose_frame(tfb,tfb->tx_frame);
