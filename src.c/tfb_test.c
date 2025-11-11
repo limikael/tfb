@@ -98,8 +98,8 @@ void test_assign_device() {
 	assert(strstr(s,"assign_name: (5) 'hello'"));
 	tfb_frame_reset(frame);
 
-	assert(tfb_device_id_by_name(tfb,"hello")==1);
-	assert(tfb_device_id_by_name(tfb,"hello2")==0);
+	assert(tfb_get_device_id_by_name(tfb,"hello")==1);
+	assert(tfb_get_device_id_by_name(tfb,"hello2")==0);
 	assert(!strcmp(device_listener_param,"hello"));
 
 	tfb_frame_dispose(frame);
@@ -150,6 +150,52 @@ void test_device_announcement() {
 	tfb_dispose(tfb);
 }
 
+void tfb_read_frame(tfb_t *tfb, tfb_frame_t *frame) {
+	assert(tfb_tx_is_available(tfb));
+	tfb_frame_reset(frame);
+	while (tfb_tx_is_available(tfb))
+		tfb_frame_rx_push_byte(frame,tfb_tx_pop_byte(tfb));
+
+	assert(tfb_frame_rx_is_complete(frame));
+}
+
+void tfb_write_frame(tfb_t *tfb, tfb_frame_t *frame) {
+	assert(tfb_rx_is_available(tfb));
+	while (tfb_frame_tx_is_available(frame))
+		tfb_rx_push_byte(tfb,tfb_frame_tx_pop_byte(frame));
+}
+
+void test_device_announcement_on_session() {
+	mock_millis=1000;
+	printf("- Announce device on receive session.\n");
+
+	tfb_t *tfb=tfb_create_device("hello","world");
+	tfb_frame_t *frame=tfb_frame_create(1024);
+
+	mock_millis+=1000;
+	tfb_tick(tfb);
+	tfb_read_frame(tfb,frame);
+
+	tfb_frame_reset(frame);
+	tfb_frame_write_num(frame,TFB_SESSION_ID,1234);
+	tfb_frame_write_checksum(frame);
+	tfb_write_frame(tfb,frame);
+
+	assert(tfb->tx_queue_len==1);
+	assert(tfb->session_id==1234);
+
+	mock_millis+=1000;
+	tfb_tick(tfb);
+	tfb_read_frame(tfb,frame);
+	assert(tfb->tx_queue_len==0);
+
+	assert(!tfb_frame_strcmp(frame,TFB_ANNOUNCE_NAME,"hello"));
+	assert(!tfb_frame_strcmp(frame,TFB_ANNOUNCE_TYPE,"world"));
+
+	tfb_frame_dispose(frame);
+	tfb_dispose(tfb);
+}
+
 int main() {
 	//srand((unsigned int)time(NULL));
 	srand(0);
@@ -161,6 +207,7 @@ int main() {
 	test_session_announcement();
 	test_assign_device();
 	test_device_announcement();
+	test_device_announcement_on_session();
 
 	printf("Blocks remaining: %d\n",tfb_allocated_blocks);
 	assert(!tfb_allocated_blocks);

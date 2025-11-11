@@ -26,6 +26,13 @@ export default class TinyFieldbusController extends SyncEventTarget {
 		}
 	}
 
+	getDeviceByName(name) {
+		if (!this.devicesByName[name])
+			throw new Error("No such device: "+name);
+
+		return this.devicesByName[name];
+	}
+
 	handleDevice=ev=>{
 		if (ev.id) {
 			if (this.devicesByName[ev.name]) {

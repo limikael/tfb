@@ -30,6 +30,7 @@ typedef enum {
 struct tfb_device {
 	char *name,*type;
 	int id;
+	uint32_t activity_deadline;
 };
 
 struct tfb {

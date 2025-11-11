@@ -24,7 +24,7 @@ export default class TfbHandler extends SyncEventTarget {
 		TFB.tfb_device_func(this.tfb,TFB.module.addFunction((name_ptr)=>{
 			logAndThrow(()=>this.dispatchEvent(new CustomEvent("device",{
 				name: TFB.module.UTF8ToString(name_ptr),
-				id: TFB.tfb_device_id_by_name(this.tfb,name_ptr)
+				id: TFB.tfb_get_device_id_by_name(this.tfb,name_ptr)
 			})));
 		},"vi"));
 

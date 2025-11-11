@@ -20,7 +20,7 @@ _tfb_message_from_func,\
 _tfb_status_func,\
 _tfb_millis_func,\
 _tfb_device_func,\
-_tfb_device_id_by_name,\
+_tfb_get_device_id_by_name,\
 _tfb_tx_pop_byte,\
 _tfb_tx_is_available,\
 _tfb_is_device,\

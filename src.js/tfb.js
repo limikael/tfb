@@ -32,7 +32,7 @@ def("tfb_get_queue_len","number",["number"]);
 def("tfb_is_bus_available","boolean",["number"]);
 def("tfb_srand","null",["number"]);
 def("tfb_get_timeout","number",["number"]);
-def("tfb_device_id_by_name","number",["number"]);
+def("tfb_get_device_id_by_name","number",["number"]);
 
 def("tfb_frame_create","number",["number"]);
 def("tfb_frame_dispose","null",["number"]);

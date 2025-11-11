@@ -19,6 +19,7 @@ export default class Bus extends EventEmitter {
 		super();
 		this.ports=[];
 		this.frame=TFB.tfb_frame_create(1024);
+		this.frame_log=[];
 
 		let p=this.createPort();
 		p.on("data",data=>{
@@ -41,6 +42,9 @@ export default class Bus extends EventEmitter {
 							frame_object[key_name]=TFB.tfb_frame_get_num(this.frame,key);
 					}
 
+					//console.log("frame obj: ",frame_object);
+
+					this.frame_log.push(frame_object);
 					this.emit("frame",frame_object);
 
 					//console.log(frame_object);

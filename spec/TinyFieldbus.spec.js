@@ -1,10 +1,11 @@
 import TinyFieldbusController from "../src.js/TinyFieldbusController.js";
 import TinyFieldbusDevice from "../src.js/TinyFieldbusDevice.js";
-import {ResolvablePromise, arrayBufferToString} from "../src.js/js-util.js";
+import {ResolvablePromise, arrayBufferToString, EventCapture} from "../src.js/js-util.js";
 import Bus from "./Bus.js";
+import TFB from "../src.js/tfb.js";
 
 describe("tiny fieldbus",()=>{
-	describe("",()=>{
+	describe("timed",()=>{
 	    beforeEach(function() {
 			jasmine.clock().install();
 	    });
@@ -35,16 +36,10 @@ describe("tiny fieldbus",()=>{
 		});
 
 		it("can check connection and closes itself on missed ack",async ()=>{
+			TFB.tfb_srand(0);
 			jasmine.clock().mockDate(new Date(1000));
-			let frame_log=[];
 			let event_log=[];
-
 			let bus=new Bus();
-			bus.on("frame",o=>{
-				//console.log(o);
-				frame_log.push(o);
-			});
-
 			let c=new TinyFieldbusController({port: bus.createPort()});
 			let d=new TinyFieldbusDevice({port: bus.createPort(), name: "hello", type: "world"});
 			d.addEventListener("connect",()=>event_log.push("connect"));
@@ -54,7 +49,13 @@ describe("tiny fieldbus",()=>{
 			jasmine.clock().tick(1000);
 			expect(event_log).toEqual(["connect"]);
 			expect(d.isConnected()).toEqual(true);
-			expect(frame_log.length).toEqual(3);
+			//console.log(bus.frame_log);
+			expect(bus.frame_log).toEqual([
+				{ announce_name: 'hello', announce_type: 'world', checksum: 113 },
+				{ assign_name: 'hello', to: 1, session_id: 27579, checksum: -71 },
+				{ session_id: 27579, checksum: -117 },
+				{ from: 1, checksum: 25 }
+			]);
 
 			bus.removePort(c.port);
 
@@ -87,6 +88,75 @@ describe("tiny fieldbus",()=>{
 			jasmine.clock().tick(10000);
 
 			expect(d.isConnected()).toEqual(false);
+		});
+
+		it("sends device announcements on session announcements",async ()=>{
+			TFB.tfb_srand(0);
+			jasmine.clock().mockDate(new Date(1000));
+			let bus=new Bus();
+			let device=new TinyFieldbusDevice({port: bus.createPort(), name: "hello", type: "world"});
+			jasmine.clock().tick(1000);
+			let controller=new TinyFieldbusController({port: bus.createPort()});
+			jasmine.clock().tick(5000);
+			expect(device.isConnected()).toEqual(true);
+
+			expect(bus.frame_log.slice(0,8)).toEqual([
+				{ announce_name: 'hello', announce_type: 'world', checksum: 113 },
+				{ session_id: 15224, checksum: 24 },
+				{ announce_name: 'hello', announce_type: 'world', checksum: 113 },
+				{ assign_name: 'hello', to: 1, session_id: 15224, checksum: 42 },
+				{ session_id: 15224, checksum: 24 },
+				{ from: 1, checksum: 25 },
+				{ session_id: 15224, checksum: 24 },
+				{ from: 1, checksum: 25 }
+			]);
+
+			//console.log(bus.frame_log.slice(0,8));
+		});
+
+		it("removes devices on missing ack",async ()=>{
+			TFB.tfb_srand(0);
+			jasmine.clock().mockDate(new Date(1000));
+			let bus=new Bus();
+			let device=new TinyFieldbusDevice({port: bus.createPort(), name: "hello", type: "world"});
+			let controller=new TinyFieldbusController({port: bus.createPort()});
+			jasmine.clock().tick(1000);
+
+			bus.removePort(device.port);
+
+			let deviceEp=controller.getDeviceByName("hello");
+			let deviceEpEvents=new EventCapture(deviceEp,["close"]);
+			deviceEp.send("there?");
+			jasmine.clock().tick(10000);
+
+			//console.log(bus.frame_log);
+			expect(deviceEpEvents.events.length).toEqual(1);
+			expect(deviceEpEvents.events[0].type).toEqual("close");
+			expect(Object.values(controller.devicesByName).length).toEqual(0);
+		});
+
+		it("removes devices on no activity",async ()=>{
+			TFB.tfb_srand(0);
+			jasmine.clock().mockDate(new Date(1000));
+			let bus=new Bus();
+			let device=new TinyFieldbusDevice({port: bus.createPort(), name: "hello", type: "world"});
+			let controller=new TinyFieldbusController({port: bus.createPort()});
+			jasmine.clock().tick(1000);
+
+			let deviceEp=controller.getDeviceByName("hello");
+			//deviceEp.addEventListener("close",()=>console.log("******* closed"));
+			let deviceEpEvents=new EventCapture(deviceEp,["close"]);
+			jasmine.clock().tick(10000);
+
+			expect(Object.values(controller.devicesByName).length).toEqual(1);
+
+			bus.removePort(device.port);
+			jasmine.clock().tick(10000);
+			expect(deviceEpEvents.events.length).toEqual(1);
+			expect(deviceEpEvents.events[0].type).toEqual("close");
+			expect(Object.values(controller.devicesByName).length).toEqual(0);
+
+			//console.log(bus.frame_log);
 		});
 	});
 

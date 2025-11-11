@@ -76,3 +76,12 @@ export function logAndThrow(fn) {
         throw e;
     }
 }
+
+export class EventCapture {
+    constructor(dispatcher, eventTypes) {
+        this.events=[];
+
+        for (let eventType of eventTypes)
+            dispatcher.addEventListener(eventType,ev=>this.events.push(ev));
+    }
+}
