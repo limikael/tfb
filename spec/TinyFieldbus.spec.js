@@ -177,31 +177,22 @@ describe("tiny fieldbus",()=>{
 			expect(bus.frame_log).toContain({ from: 123, ack: 2, checksum: 80 });
 			//console.log(bus.frame_log);
 		});
-	});
 
-	it("assigns",async ()=>{
-		let promise=new ResolvablePromise();
-		let frame_log=[];
-		let bus=new Bus();
-		bus.on("frame",o=>{
-			//console.log(o); 
-			frame_log.push(o);
-			if (o.assign_name)
-				promise.resolve();
+		it("assigns",async ()=>{
+			TFB.tfb_srand(0);
+			jasmine.clock().mockDate(new Date(1000));
+
+			let bus=new Bus();
+			let controller=new TinyFieldbusController({port: bus.createPort()});
+			let controllerEvents=new EventCapture(controller,["device"]);
+			let device=new TinyFieldbusDevice({port: bus.createPort(), name: "devname", type: "devtype"});
+
+			jasmine.clock().tick(1000);
+
+			expect(controllerEvents.events.length).toEqual(1);
+			let deviceEp=controllerEvents.events[0].device;
+			expect(deviceEp.name).toEqual("devname");
 		});
-
-		let controllerDevice;
-		let controller=new TinyFieldbusController({port: bus.createPort()});
-		controller.addEventListener("device",ev=>{
-			controllerDevice=ev.device;
-		});
-		let device=new TinyFieldbusDevice({port: bus.createPort(), name: "devname", type: "devtype"});
-
-		await promise;
-
-		//console.log(controllerDevice);
-		expect(controllerDevice.name).toEqual("devname");
-		expect(controllerDevice.id).toEqual(1);
 	});
 
 	it("can send and receive",async ()=>{
