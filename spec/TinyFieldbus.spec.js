@@ -7,7 +7,6 @@ import TFB from "../src.js/tfb.js";
 describe("tiny fieldbus",()=>{
     beforeEach(function() {
 		TFB.tfb_srand(0);
-
 		jasmine.clock().install();
 		jasmine.clock().mockDate(new Date(1000));
     });
