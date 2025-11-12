@@ -44,3 +44,4 @@ void tfb_srand(unsigned int seed);
 int tfb_get_timeout(tfb_t *tfb);
 int tfb_get_device_id_by_name(tfb_t *tfb, char *s);
 bool tfb_is_connected(tfb_t *tfb);
+int tfb_get_session_id(tfb_t *tfb);

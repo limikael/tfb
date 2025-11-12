@@ -74,17 +74,36 @@ export default class TfbHandler extends SyncEventTarget {
 			throw new Error("Send failed");
 	}
 
-	drain() {
+	/*drain() {
 		while (TFB.tfb_tx_is_available(this.tfb)) {
 			let byte=TFB.tfb_tx_pop_byte(this.tfb);
-			//console.log("draining: "+byte);
 			this.port.write(new Uint8Array([byte]))
 		}
+	}*/
+
+	drain() {
+		let bytes=[];
+		while (TFB.tfb_tx_is_available(this.tfb))
+			bytes.push(TFB.tfb_tx_pop_byte(this.tfb));
+
+		if (bytes.length) {
+			this.port.write(new Uint8Array(bytes))
+			TFB.tfb_notify_bus_activity(this.tfb);
+		}
 	}
+
 
 	handleData=(data)=>{
 		for (let byte of data) {
 			//console.log("byte: "+byte+" seen by: "+this.id);
+
+			if (!TFB.tfb_rx_is_available(this.tfb)) {
+				this.drain();
+				TFB.tfb_tick(this.tfb);
+				this.drain();
+				this.updateTimeout();
+			}
+
 			TFB.tfb_rx_push_byte(this.tfb,byte);
 		}
 

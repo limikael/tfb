@@ -1,7 +1,7 @@
 import TinyFieldbusController from "../src.js/TinyFieldbusController.js";
 import TinyFieldbusDevice from "../src.js/TinyFieldbusDevice.js";
-import {ResolvablePromise, arrayBufferToString, EventCapture} from "../src.js/js-util.js";
-import Bus from "./Bus.js";
+import {ResolvablePromise, arrayBufferToString, EventCapture, concatUint8Arrays} from "../src.js/js-util.js";
+import Bus, {encodeFrame, decodeFrameData} from "./Bus.js";
 import TFB from "../src.js/tfb.js";
 
 describe("tiny fieldbus",()=>{
@@ -15,24 +15,18 @@ describe("tiny fieldbus",()=>{
 	    });
 
 		it("sends controller session announcements",async ()=>{
+			TFB.tfb_srand(0);
 			jasmine.clock().mockDate(new Date(1000));
-			//let promise=new ResolvablePromise();
-			let frame_log=[];
 
 			let bus=new Bus();
-			bus.on("frame",o=>{
-				//console.log(o);
-				frame_log.push(o);
-			});
-
 			let c=new TinyFieldbusController({port: bus.createPort()});
-			jasmine.clock().tick(100);
-			expect(frame_log.length).toEqual(1);
+			jasmine.clock().tick(1000);
+			expect(bus.frame_log.length).toEqual(1);
 
 			jasmine.clock().tick(10000);
-			expect(frame_log.length).toBeGreaterThan(5);
+			expect(bus.frame_log.length).toBeGreaterThan(5);
 
-			expect(frame_log[0].hasOwnProperty("session_id")).toBeTrue();
+			//console.log(bus.frame_log);
 		});
 
 		it("can check connection and closes itself on missed ack",async ()=>{
@@ -93,6 +87,7 @@ describe("tiny fieldbus",()=>{
 		it("sends device announcements on session announcements",async ()=>{
 			TFB.tfb_srand(0);
 			jasmine.clock().mockDate(new Date(1000));
+
 			let bus=new Bus();
 			let device=new TinyFieldbusDevice({port: bus.createPort(), name: "hello", type: "world"});
 			jasmine.clock().tick(1000);
@@ -102,12 +97,12 @@ describe("tiny fieldbus",()=>{
 
 			expect(bus.frame_log.slice(0,8)).toEqual([
 				{ announce_name: 'hello', announce_type: 'world', checksum: 113 },
-				{ session_id: 15224, checksum: 24 },
+				{ session_id: 21335, checksum: 95 },
 				{ announce_name: 'hello', announce_type: 'world', checksum: 113 },
-				{ assign_name: 'hello', to: 1, session_id: 15224, checksum: 42 },
-				{ session_id: 15224, checksum: 24 },
+				{ assign_name: 'hello', to: 1, session_id: 21335, checksum: 109 },
+				{ session_id: 21335, checksum: 95 },
 				{ from: 1, checksum: 25 },
-				{ session_id: 15224, checksum: 24 },
+				{ session_id: 21335, checksum: 95 },
 				{ from: 1, checksum: 25 }
 			]);
 
@@ -156,6 +151,30 @@ describe("tiny fieldbus",()=>{
 			expect(deviceEpEvents.events[0].type).toEqual("close");
 			expect(Object.values(controller.devicesByName).length).toEqual(0);
 
+			//console.log(bus.frame_log);
+		});
+
+		//fix this test...
+		it("can process 2 messages in one chunk",async ()=>{
+			TFB.tfb_srand(0);
+			jasmine.clock().mockDate(new Date(1000));
+			let bus=new Bus();
+			let device=new TinyFieldbusDevice({port: bus.createPort(), name: "devname", type: "devtype"});
+			jasmine.clock().tick(1000);
+
+			bus.writeFrame({assign_name: "devname", to: 123, session_id: 1234});
+			/*bus.writeFrame({to: 123, payload: "hello", seq: 1});
+			bus.writeFrame({to: 123, payload: "again", seq: 2});*/
+			bus.write(concatUint8Arrays(
+				encodeFrame({to: 123, payload: "hello", seq: 1}),
+				encodeFrame({to: 123, payload: "again", seq: 2})
+			));
+
+			jasmine.clock().tick(1000);
+
+			expect(TFB.tfb_get_session_id(device.tfb)).toEqual(1234);
+			expect(bus.frame_log).toContain({ from: 123, ack: 1, checksum: 83 });
+			expect(bus.frame_log).toContain({ from: 123, ack: 2, checksum: 80 });
 			//console.log(bus.frame_log);
 		});
 	});

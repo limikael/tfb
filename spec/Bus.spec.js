@@ -1,6 +1,25 @@
-import Bus from "./Bus.js";
+import Bus, {encodeFrame, decodeFrameData} from "./Bus.js";
+import TFB from "../src.js/tfb.js";
 
 describe("bus",()=>{
+	it("can encode a frame",()=>{
+		let data=encodeFrame({to: 1, ack: 123, announce_name: "hello"});
+		//console.log(data);
+
+		/*let frame=TFB.tfb_frame_create(1024);
+		for (let byte of data) {
+			TFB.tfb_frame_rx_push_byte(byte);
+			tfb_frame_rx_is_complete
+		}*/
+
+
+
+		let decoded=decodeFrameData(data);
+		//console.log(decoded);
+
+		expect(decoded).toEqual({ to: 1, ack: 123, announce_name: 'hello', checksum: 1 });
+	});
+
 	it("can send and receive",()=>{
 		let b=new Bus();
 		let log=[];

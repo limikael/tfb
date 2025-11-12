@@ -14,6 +14,7 @@ _tfb_create_device,\
 _tfb_create,\
 _tfb_dispose,\
 _tfb_rx_push_byte,\
+_tfb_rx_is_available,\
 _tfb_set_id,\
 _tfb_message_func,\
 _tfb_message_from_func,\
@@ -32,7 +33,9 @@ _tfb_tick,\
 _tfb_get_queue_len,\
 _tfb_is_bus_available,\
 _tfb_srand,\
+_tfb_get_session_id,\
 _tfb_get_timeout,\
+_tfb_notify_bus_activity,\
 _tfb_frame_create,\
 _tfb_frame_dispose,\
 _tfb_frame_rx_push_byte,\

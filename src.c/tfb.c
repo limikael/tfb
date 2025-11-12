@@ -8,6 +8,10 @@
 
 uint32_t (*tfb_millis)()=NULL;
 
+int tfb_get_session_id(tfb_t *tfb) {
+	return tfb->session_id;
+}
+
 void tfb_dispose_frame(tfb_t *tfb, tfb_frame_t *frame) {
 	//printf("dispose frame called!!!\n");
 

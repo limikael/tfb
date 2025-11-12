@@ -85,3 +85,14 @@ export class EventCapture {
             dispatcher.addEventListener(eventType,ev=>this.events.push(ev));
     }
 }
+
+export function concatUint8Arrays(...arrays) {
+    const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const arr of arrays) {
+        result.set(arr, offset);
+        offset += arr.length;
+    }
+    return result;
+}
