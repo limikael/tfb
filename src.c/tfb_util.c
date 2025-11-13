@@ -1,6 +1,7 @@
 #include "tfb_util.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 int tfb_allocated_blocks=0;
 
@@ -29,4 +30,12 @@ char *tfb_strdup(char *s) {
 void tfb_free(void *p) {
 	tfb_allocated_blocks--;
 	free(p);
+}
+
+uint8_t compute_xor_checksum(uint8_t *data, size_t size) {
+    uint8_t check=0;
+    for (int i=0; i<size; i++)
+        check^=data[i];
+
+    return check;
 }

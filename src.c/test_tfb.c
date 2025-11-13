@@ -15,9 +15,6 @@ void test_tfb_create() {
 	tfb_t *tfb=tfb_create_controller();
 	assert(tfb!=NULL);
 	tfb_dispose(tfb);
-
-	//printf("allocated: %d\n",tfb_allocated_blocks);
-	//assert(tfb_allocated_blocks==0);
 }
 
 void test_session_announcement() {
@@ -252,12 +249,20 @@ void test_receive_assignment() {
 	tfb_dispose(tfb);
 }
 
+void test_tfb_link();
+void test_tfb_link_receive();
+void test_tfb_link_send();
+
 int main() {
 	//srand((unsigned int)time(NULL));
 	srand(0);
 
 	printf("Running tests...\n");
 	tfb_millis=mock_millis_func;
+
+	test_tfb_link();
+	test_tfb_link_receive();
+	test_tfb_link_send();
 
 	test_tfb_create();
 	test_session_announcement();
