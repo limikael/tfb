@@ -11,3 +11,5 @@ bool tfb_link_tx_is_available(tfb_link_t *link);
 uint8_t tfb_link_tx_pop_byte(tfb_link_t *link);
 void tfb_link_notify_bus_activity(tfb_link_t *link);
 int tfb_link_get_timeout(tfb_link_t *link);
+void tfb_link_set_tag(tfb_link_t *link, void *tag);
+void *tfb_link_get_tag(tfb_link_t *link);

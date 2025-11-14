@@ -32,7 +32,6 @@ export default class TfbHandler extends SyncEventTarget {
 			logAndThrow(()=>this.dispatchEvent(new CustomEvent("status")));
 		},"v"));
 
-		//TFB.tfb_set_id(this.tfb,this.id);
 		this.port.on("data",this.handleData);
 		this.updateTimeout();
 	}
@@ -94,18 +93,8 @@ export default class TfbHandler extends SyncEventTarget {
 
 
 	handleData=(data)=>{
-		for (let byte of data) {
-			//console.log("byte: "+byte+" seen by: "+this.id);
-
-			if (!TFB.tfb_rx_is_available(this.tfb)) {
-				this.drain();
-				TFB.tfb_tick(this.tfb);
-				this.drain();
-				this.updateTimeout();
-			}
-
+		for (let byte of data)
 			TFB.tfb_rx_push_byte(this.tfb,byte);
-		}
 
 		this.drain();
 		TFB.tfb_tick(this.tfb);

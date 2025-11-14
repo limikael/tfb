@@ -59,6 +59,11 @@ def("tfb_frame_tx_pop_byte","number",["number"]);
 def("tfb_frame_tx_rewind","null",["number"]);
 def("tfb_frame_get_key_at","number",["number","number"]);
 def("tfb_frame_get_num_keys","number",["number"]);
+def("tfb_frame_create_from_data","number",["number","number"]);
+
+def("tfb_link_create","number",[]);
+def("tfb_link_rx_push_byte","bool",["number","number"]);
+def("tfb_link_frame_func","null",["number","number"]);
 
 tfb.tfb_millis_func(tfb.module.addFunction(()=>{
 	return Date.now();

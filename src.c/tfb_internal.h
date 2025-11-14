@@ -16,19 +16,6 @@
 extern uint32_t (*tfb_millis)();
 
 typedef enum {
-	RX_RECEIVE,
-	RX_ESCAPE,
-	RX_COMPLETE,
-} tfb_frame_rx_state_t;
-
-typedef enum {
-	TX_INIT,
-	TX_SENDING,
-	TX_ESCAPING,
-	TX_COMPLETE
-} tfb_frame_tx_state_t;
-
-typedef enum {
 	TFB_LINK_RX_INIT,
 	TFB_LINK_RX_RECEIVE,
 	TFB_LINK_RX_ESCAPE
@@ -47,6 +34,7 @@ struct tfb_link {
 	tfb_link_tx_state_t tx_state;
 	void (*frame_func)(tfb_link_t *link, uint8_t *data, size_t size);
 	uint32_t bus_available_millis;
+	void *tag;
 
 	struct {
 		uint8_t *data;
@@ -62,12 +50,14 @@ struct tfb_device {
 };
 
 struct tfb {
-	tfb_frame_t *rx_frame,*tx_frame;
+	/*tfb_frame_t *rx_frame,*tx_frame;
 	tfb_frame_t *tx_queue[TFB_TX_QUEUE_LEN];
 	size_t tx_queue_len;
 	bool rx_deliverable;
+	uint32_t bus_available_millis;*/
+
+	tfb_link_t *link;
 	int id, outseq, inseq;
-	uint32_t bus_available_millis;
 	char *device_name,*device_type;
 	uint32_t announcement_deadline,activity_deadline;
 	void (*message_func)(uint8_t *data, size_t size);
@@ -82,10 +72,5 @@ struct tfb {
 
 struct tfb_frame {
 	uint8_t *buffer;
-	size_t size, capacity, tx_index;
-	tfb_frame_rx_state_t rx_state;
-	tfb_frame_tx_state_t tx_state;
-	tfb_t *tfb;
-	void (*notification_func)(tfb_t *tfb, tfb_frame_t *tfb_frame);
-	int send_at,sent_times;
+	size_t size, capacity;
 };

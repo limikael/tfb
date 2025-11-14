@@ -50,3 +50,4 @@ int tfb_get_device_id_by_name(tfb_t *tfb, char *s);
 bool tfb_is_connected(tfb_t *tfb);
 int tfb_get_session_id(tfb_t *tfb);
 int tfb_get_errno(tfb_t *tfb);
+void tfb_handle_frame(tfb_t *tfb, uint8_t *data, size_t size);

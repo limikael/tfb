@@ -1,5 +1,6 @@
 import EventEmitter from "node:events";
 import TFB from "../src.js/tfb.js";
+import {logAndThrow} from "../src.js/js-util.js";
 
 let frameTypes=[
 	{name: "checksum", value: 1,},
@@ -22,21 +23,20 @@ export default class Bus extends EventEmitter {
 	constructor() {
 		super();
 		this.ports=[];
-		this.frame=TFB.tfb_frame_create(1024);
+		this.link=TFB.tfb_link_create();
 		this.frame_log=[];
+
+		TFB.tfb_link_frame_func(this.link,TFB.module.addFunction((link, data, size)=>{
+			logAndThrow(()=>{
+				let frame_object=decodeFrame(TFB.module.HEAPU8.slice(data,data+size));
+				this.frame_log.push(frame_object);
+			});
+		},"viii"));
 
 		let p=this.createPort();
 		p.on("data",data=>{
-			for (let byte of data) {
-				TFB.tfb_frame_rx_push_byte(this.frame,byte);
-				if (TFB.tfb_frame_rx_is_complete(this.frame)) {
-					let frame_object=decodeFrame(this.frame);
-					TFB.tfb_frame_reset(this.frame);
-
-					this.frame_log.push(frame_object);
-					this.emit("frame",frame_object);
-				}
-			}
+			for (let byte of data)
+				TFB.tfb_link_rx_push_byte(this.link,byte);
 		});
 	}
 
@@ -93,8 +93,10 @@ export function encodeFrame(frame_object) {
 	}
 
 	TFB.tfb_frame_write_checksum(frame);
-	while (TFB.tfb_frame_tx_is_available(frame))
-		bytes.push(TFB.tfb_frame_tx_pop_byte(frame));
+	bytes=[];
+
+	for (let i=0; i<TFB.tfb_frame_get_size(frame); i++)
+		bytes.push(TFB.tfb_frame_get_buffer_at(frame,i));
 
 	TFB.tfb_frame_dispose(frame);
 
@@ -102,7 +104,11 @@ export function encodeFrame(frame_object) {
 	return frame_data;
 }
 
-export function decodeFrame(frame) {
+export function decodeFrame(frameData) {
+	let frame=TFB.tfb_frame_create(1024);
+	for (let byte of frameData)
+		TFB.tfb_frame_write_byte(frame,byte);
+
 	let frame_object={};
 	for (let i=0; i<TFB.tfb_frame_get_num_keys(frame); i++) {
 		let key=TFB.tfb_frame_get_key_at(frame,i);
@@ -124,15 +130,6 @@ export function decodeFrame(frame) {
 		}
 	}
 
-	return frame_object;
-}
-
-export function decodeFrameData(frame_data) {
-	let frame=TFB.tfb_frame_create(1024);
-	for (let byte of frame_data)
-		TFB.tfb_frame_rx_push_byte(frame,byte);
-
-	let frame_object=decodeFrame(frame);
 	TFB.tfb_frame_dispose(frame);
 
 	return frame_object;

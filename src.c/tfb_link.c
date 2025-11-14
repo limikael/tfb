@@ -16,10 +16,19 @@ tfb_link_t *tfb_link_create() {
 	link->tx_queue_len=0;
 	link->tx_queue=tfb_malloc(TFB_TXQUEUESIZE*sizeof(link->tx_queue[0]));
 	link->tx_index=0;
+	link->tag=NULL;
 
 	tfb_link_notify_bus_activity(link);
 
 	return link;
+}
+
+void tfb_link_set_tag(tfb_link_t *link, void *tag) {
+	link->tag=tag;
+}
+
+void *tfb_link_get_tag(tfb_link_t *link) {
+	return link->tag;
 }
 
 void tfb_link_notify_bus_activity(tfb_link_t *link) {
