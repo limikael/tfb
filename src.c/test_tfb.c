@@ -73,7 +73,7 @@ void test_assign_device() {
 	tfb_frame_t *f2=tfb_frame_create_from_data(tfb->link->tx_queue[1].data,tfb->link->tx_queue[1].size);
 	char s[1024];
 	tfb_frame_sprint(f2,s);
-	printf("frame: %s\n",s);
+	//printf("frame: %s\n",s);
 	//assert(strstr(s,"assign_name: (5) 'hello'"));
 	tfb_frame_dispose(f2);
 
@@ -150,7 +150,7 @@ void test_device_announcement_on_session() {
 	tfb_dispose(tfb);
 }
 
-/*int test_receive_assignment_status_calls=0;
+int test_receive_assignment_status_calls=0;
 void test_receive_assignment_status() {
 	test_receive_assignment_status_calls++;
 }
@@ -165,14 +165,16 @@ void test_receive_assignment() {
 
 	mock_millis+=1000;
 	tfb_tick(tfb);
-	tfb_read_frame(tfb,frame);
+
+	while (tfb_tx_is_available(tfb))
+		tfb_tx_pop_byte(tfb);
 
 	tfb_frame_reset(frame);
 	tfb_frame_write_num(frame,TFB_SESSION_ID,1234);
 	tfb_frame_write_data(frame,TFB_ASSIGN_NAME,(uint8_t*)"hello",5);
 	tfb_frame_write_num(frame,TFB_TO,123);
 	tfb_frame_write_checksum(frame);
-	tfb_write_frame(tfb,frame);
+	tfb_handle_frame(tfb,frame->buffer,frame->size);
 
 	assert(tfb->session_id==1234);
 	assert(tfb->id==123);
@@ -187,7 +189,7 @@ void test_receive_assignment() {
 	tfb_frame_write_num(frame,TFB_SESSION_ID,1234);
 	tfb_frame_write_num(frame,TFB_RESET_TO,123);
 	tfb_frame_write_checksum(frame);
-	tfb_write_frame(tfb,frame);
+	tfb_handle_frame(tfb,frame->buffer,frame->size);
 
 	assert(tfb->session_id==1234);
 	assert(tfb->id==-1);
@@ -197,14 +199,54 @@ void test_receive_assignment() {
 	mock_millis+=1000;
 	tfb_tick(tfb);
 
-	tfb_read_frame(tfb,frame);
+	tfb_frame_t *f2=tfb_frame_create_from_data(
+		tfb->link->tx_queue[tfb->link->tx_queue_len-1].data,
+		tfb->link->tx_queue[tfb->link->tx_queue_len-1].size
+	);
+
 	char s[1024];
-	//printf("frame: %s\n",tfb_frame_sprint(frame,s));
+	tfb_frame_sprint(f2,s);
+	//printf("frame: %s\n",tfb_frame_sprint(f2,s));
 	assert(!strcmp(s,"announce_name: (5) 'hello' announce_type: (5) 'world' checksum: 113 "));
+	tfb_frame_dispose(f2);
 
 	tfb_frame_dispose(frame);
 	tfb_dispose(tfb);
-}*/
+}
+
+void test_tfb_send() {
+	printf("- Sends, and clears the queue on ack.\n");
+	mock_millis=1000;
+	tfb_t *tfb=tfb_create_device("hello","world");
+	tfb_frame_t *frame=tfb_frame_create(1024);
+
+	assert(!tfb_send(tfb,(uint8_t*)"hello",5));
+
+	tfb_frame_reset(frame);
+	tfb_frame_write_num(frame,TFB_SESSION_ID,1234);
+	tfb_frame_write_data(frame,TFB_ASSIGN_NAME,(uint8_t*)"hello",5);
+	tfb_frame_write_num(frame,TFB_TO,123);
+	tfb_frame_write_checksum(frame);
+	tfb_handle_frame(tfb,frame->buffer,frame->size);
+
+	assert(tfb_send(tfb,(uint8_t*)"hello",5));
+
+	tfb_frame_t *f2=tfb_frame_create_from_data(
+		tfb->link->tx_queue[tfb->link->tx_queue_len-1].data,
+		tfb->link->tx_queue[tfb->link->tx_queue_len-1].size
+	);
+
+	char s[1024];
+	tfb_frame_sprint(f2,s);
+	//printf("frame: %s\n",tfb_frame_sprint(f2,s));
+	assert(strstr(s,"payload: (5) 'hello'"));
+	tfb_frame_dispose(f2);
+
+	//mock_millis+=1000;
+
+	tfb_frame_dispose(frame);
+	tfb_dispose(tfb);
+}
 
 void test_tfb_link();
 void test_tfb_link_receive();
@@ -228,7 +270,8 @@ int main() {
 	test_assign_device();
 	test_device_announcement();
 	test_device_announcement_on_session();
-	//test_receive_assignment();*/
+	test_receive_assignment();
+	test_tfb_send();
 
 	test_tfb_frame_basic();
 

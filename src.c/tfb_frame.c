@@ -250,7 +250,7 @@ char *tfb_frame_sprint(tfb_frame_t *frame, char *s) {
 			case TFB_CHECKSUM: keyname="checksum"; break;
 			case TFB_FROM: keyname="from"; break;
 			case TFB_TO: keyname="to"; break;
-			case TFB_PAYLOAD: keyname="payload"; break;
+			case TFB_PAYLOAD: keyname="payload"; isdata=1; break;
 			case TFB_SEQ: keyname="seq"; break;
 			case TFB_ACK: keyname="ack"; break;
 			case TFB_ANNOUNCE_NAME: keyname="announce_name"; isdata=1; break;

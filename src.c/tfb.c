@@ -308,6 +308,7 @@ void tfb_handle_frame(tfb_t *tfb, uint8_t *data, size_t size) {
 		}*/
 	}
 
+	// assign session id and device id to device
 	if (tfb_is_device(tfb) &&
 			tfb_frame_has_data(frame,TFB_SESSION_ID)) {
 		int session_id=tfb_frame_get_num(frame,TFB_SESSION_ID);
@@ -332,12 +333,14 @@ void tfb_handle_frame(tfb_t *tfb, uint8_t *data, size_t size) {
 			tfb_frame_t *pongframe=tfb_frame_create(32);
 			tfb_frame_write_num(pongframe,TFB_FROM,tfb->id);
 			tfb_send_frame(tfb,pongframe);
+			tfb_frame_dispose(pongframe);
 		}
 
 		if (!tfb_is_connected(tfb))
 			tfb_announce_device(tfb);
 	}
 
+	// handle new device
 	if (tfb_is_controller(tfb) &&
 			tfb_frame_has_data(frame,TFB_ANNOUNCE_NAME)) {
 		//printf("got dev announce!\n");
@@ -365,6 +368,14 @@ void tfb_handle_frame(tfb_t *tfb, uint8_t *data, size_t size) {
 		tfb_frame_dispose(assignframe);
 
 		tfb_free(name);
+	}
+
+	// handle reset id
+	if (tfb_is_device(tfb) &&
+			tfb_is_connected(tfb) &&
+			tfb_frame_get_num(frame,TFB_RESET_TO)==tfb->id) {
+		tfb_set_id(tfb,-1);
+		tfb_announce_device(tfb);
 	}
 
 	tfb_frame_dispose(frame);
@@ -575,6 +586,7 @@ bool tfb_send(tfb_t *tfb, uint8_t *data, size_t size) {
 	tfb_frame_write_data(frame,TFB_PAYLOAD,data,size);
 	tfb_frame_write_checksum(frame);
 	tfb_link_send(tfb->link,tfb_frame_get_buffer(frame),tfb_frame_get_size(frame));
+	tfb_frame_dispose(frame);
 
 	//printf("here... qlen=%d\n",tfb->tx_queue_len);
 
@@ -604,6 +616,7 @@ bool tfb_send_to(tfb_t *tfb, uint8_t *data, size_t size, int to) {
 	tfb_frame_write_data(frame,TFB_PAYLOAD,data,size);
 	tfb_frame_write_checksum(frame);
 	tfb_link_send(tfb->link,tfb_frame_get_buffer(frame),tfb_frame_get_size(frame));
+	tfb_frame_dispose(frame);
 
 	return true;
 }
