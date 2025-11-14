@@ -48,8 +48,14 @@ tfb_frame_t *tfb_frame_create(size_t capacity) {
 	frame->buffer=tfb_malloc(capacity);
 	frame->capacity=capacity;
 	frame->size=0;
+	frame->resend_count=0;
+	tfb_frame_update_resend_deadline(frame);
 
 	return frame;
+}
+
+void tfb_frame_update_resend_deadline(tfb_frame_t *frame) {
+	frame->resend_deadline=tfb_millis()+(TFB_RESEND_BASE<<(frame->resend_count));
 }
 
 tfb_frame_t *tfb_frame_create_from_data(uint8_t *data, size_t size) {

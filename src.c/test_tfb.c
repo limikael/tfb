@@ -230,6 +230,11 @@ void test_tfb_send() {
 	tfb_handle_frame(tfb,frame->buffer,frame->size);
 
 	assert(tfb_send(tfb,(uint8_t*)"hello",5));
+	assert(tfb_send(tfb,(uint8_t*)"hello again",11));
+	assert(tfb->tx_queue_len==2);
+	assert(tfb_frame_get_num(tfb->tx_queue[0],TFB_SEQ)==1);
+	assert(tfb_frame_get_num(tfb->tx_queue[1],TFB_SEQ)==2);
+	assert(tfb->outseq==3);
 
 	tfb_frame_t *f2=tfb_frame_create_from_data(
 		tfb->link->tx_queue[tfb->link->tx_queue_len-1].data,
@@ -239,10 +244,61 @@ void test_tfb_send() {
 	char s[1024];
 	tfb_frame_sprint(f2,s);
 	//printf("frame: %s\n",tfb_frame_sprint(f2,s));
-	assert(strstr(s,"payload: (5) 'hello'"));
+	assert(strstr(s,"payload: (11) 'hello again'"));
 	tfb_frame_dispose(f2);
 
 	//mock_millis+=1000;
+
+	tfb_frame_reset(frame);
+	tfb_frame_write_num(frame,TFB_TO,123);
+	tfb_frame_write_num(frame,TFB_ACK,999);
+	tfb_frame_write_checksum(frame);
+	tfb_handle_frame(tfb,frame->buffer,frame->size);
+	assert(tfb->tx_queue_len==2);
+
+	tfb_frame_reset(frame);
+	tfb_frame_write_num(frame,TFB_TO,123);
+	tfb_frame_write_num(frame,TFB_ACK,1);
+	tfb_frame_write_checksum(frame);
+	tfb_handle_frame(tfb,frame->buffer,frame->size);
+	assert(tfb->tx_queue_len==1);
+
+	tfb_frame_reset(frame);
+	tfb_frame_write_num(frame,TFB_TO,123);
+	tfb_frame_write_num(frame,TFB_ACK,2);
+	tfb_frame_write_checksum(frame);
+	tfb_handle_frame(tfb,frame->buffer,frame->size);
+	assert(tfb->tx_queue_len==0);
+
+	tfb_frame_dispose(frame);
+	tfb_dispose(tfb);
+}
+
+void test_tfb_resend() {
+	printf("- Resends.\n");
+	mock_millis=1000;
+	tfb_t *tfb=tfb_create_device("hello","world");
+	tfb_frame_t *frame=tfb_frame_create(1024);
+
+	assert(!tfb_send(tfb,(uint8_t*)"hello",5));
+
+	tfb_frame_reset(frame);
+	tfb_frame_write_num(frame,TFB_SESSION_ID,1234);
+	tfb_frame_write_data(frame,TFB_ASSIGN_NAME,(uint8_t*)"hello",5);
+	tfb_frame_write_num(frame,TFB_TO,123);
+	tfb_frame_write_checksum(frame);
+	tfb_handle_frame(tfb,frame->buffer,frame->size);
+
+	assert(tfb_send(tfb,(uint8_t*)"hello",5));
+
+	for (int i=0; i<10; i++) {
+		mock_millis+=1000;
+		tfb_tick(tfb);
+	}
+
+	//printf("queue len: %d\n",tfb->link->tx_queue_len);
+	assert(tfb->link->tx_queue_len==7);
+	assert(tfb->tx_queue_len==0);
 
 	tfb_frame_dispose(frame);
 	tfb_dispose(tfb);
@@ -272,6 +328,7 @@ int main() {
 	test_device_announcement_on_session();
 	test_receive_assignment();
 	test_tfb_send();
+	test_tfb_resend();
 
 	test_tfb_frame_basic();
 

@@ -7,11 +7,12 @@
 #include "tfb_link.h"
 
 #define TFB_RX_BUF_SIZE 1024
-#define TFB_TX_QUEUE_LEN 16
-#define TFB_RESEND_BASE 5
+#define TFB_RESEND_BASE 10
 #define TFB_RETRIES 5
 #define TFB_ANNOUNCEMENT_INTERVAL 1000
 #define TFB_CONNECTION_TIMEOUT 5000
+#define TFB_LINK_QUEUE_LEN 8
+#define TFB_TRANSPORT_QUEUE_LEN 8
 
 extern uint32_t (*tfb_millis)();
 
@@ -39,7 +40,7 @@ struct tfb_link {
 	struct {
 		uint8_t *data;
 		size_t size;
-	} *tx_queue;
+	} tx_queue[TFB_LINK_QUEUE_LEN];
 };
 
 struct tfb_device {
@@ -50,12 +51,6 @@ struct tfb_device {
 };
 
 struct tfb {
-	/*tfb_frame_t *rx_frame,*tx_frame;
-	tfb_frame_t *tx_queue[TFB_TX_QUEUE_LEN];
-	size_t tx_queue_len;
-	bool rx_deliverable;
-	uint32_t bus_available_millis;*/
-
 	tfb_link_t *link;
 	int id, outseq, inseq;
 	char *device_name,*device_type;
@@ -68,9 +63,13 @@ struct tfb {
 	size_t num_devices;
 	int session_id;
 	int errno;
+	tfb_frame_t *tx_queue[TFB_TRANSPORT_QUEUE_LEN];
+	size_t tx_queue_len;
 };
 
 struct tfb_frame {
 	uint8_t *buffer;
 	size_t size, capacity;
+	int resend_count;
+	uint32_t resend_deadline;
 };

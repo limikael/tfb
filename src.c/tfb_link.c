@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 #define TFB_RXBUFSIZE 1024
-#define TFB_TXQUEUESIZE 8
+//#define TFB_TXQUEUESIZE 8
 
 tfb_link_t *tfb_link_create() {
 	tfb_link_t *link=tfb_malloc(sizeof(tfb_link_t));
@@ -14,7 +14,6 @@ tfb_link_t *tfb_link_create() {
 	link->tx_state=TFB_LINK_TX_IDLE;
 	link->frame_func=NULL;
 	link->tx_queue_len=0;
-	link->tx_queue=tfb_malloc(TFB_TXQUEUESIZE*sizeof(link->tx_queue[0]));
 	link->tx_index=0;
 	link->tag=NULL;
 
@@ -48,7 +47,7 @@ void tfb_link_dispose(tfb_link_t *link) {
 	for (int i=0; i<link->tx_queue_len; i++)
 		tfb_free(link->tx_queue[i].data);
 
-	tfb_free(link->tx_queue);
+	//tfb_free(link->tx_queue);
 	tfb_free(link->rx_buf);
 	tfb_free(link);
 }
@@ -97,6 +96,8 @@ void tfb_link_rx_push_byte(tfb_link_t *link, uint8_t byte) {
 bool tfb_link_send(tfb_link_t *link, uint8_t *data, size_t size) {
 	if (compute_xor_checksum(data,size))
 		return false;
+
+	printf("sending link bytes: %zu... queue size: %d\n",size,link->tx_queue_len);
 
 	link->tx_queue[link->tx_queue_len].data=tfb_malloc(size);
 	memcpy(link->tx_queue[link->tx_queue_len].data,data,size);
